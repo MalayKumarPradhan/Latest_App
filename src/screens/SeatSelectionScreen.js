@@ -28,7 +28,7 @@ const STATUS_STYLES = {
   M_BOOKED: { backgroundColor: '#1D4ED8', borderColor: '#1E40AF', color: '#FFFFFF', label: 'Male passenger' },
 };
 
-function Seat({ seat, selected, passengerGender, onPress }) {
+function Seat({ seat, selected, passengerGender, onPress, readOnly }) {
   const style = STATUS_STYLES[seat.status] || STATUS_STYLES.BOOKED;
   const isReservedForOtherGender =
     (seat.status === 'F_AVAIL' && passengerGender !== 'Female') ||
@@ -41,10 +41,10 @@ function Seat({ seat, selected, passengerGender, onPress }) {
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={readOnly ? 'text' : 'button'}
       accessibilityLabel={`Seat ${seat.seatNumber}, ${selected ? 'selected' : style.label}`}
       accessibilityState={{ selected, disabled }}
-      disabled={disabled && !selected}
+      disabled={readOnly || (disabled && !selected)}
       onPress={onPress}
       style={[
         styles.seat,
@@ -66,7 +66,7 @@ function Seat({ seat, selected, passengerGender, onPress }) {
 }
 
 export default function SeatSelectionScreen({ navigation, route }) {
-  const { selectedBus, travelDate } = route.params || {};
+  const { selectedBus, travelDate, readOnly = false } = route.params || {};
   const [seatMap, setSeatMap] = useState(null);
   const [selectedSeatIds, setSelectedSeatIds] = useState(() => new Set());
   const [passengerGender, setPassengerGender] = useState('Female');
@@ -211,6 +211,7 @@ export default function SeatSelectionScreen({ navigation, route }) {
       seat={seat}
       selected={selectedSeatIds.has(seat.seatId)}
       passengerGender={passengerGender}
+      readOnly={readOnly}
       onPress={() => toggleSeat(seat)}
     />
   );
@@ -223,12 +224,16 @@ export default function SeatSelectionScreen({ navigation, route }) {
             icon="arrow-left"
             mode="contained-tonal"
             onPress={() => navigation.goBack()}
-            accessibilityLabel="Back to buses"
+            accessibilityLabel={readOnly ? 'Back to reservations' : 'Back to buses'}
           />
           <View style={styles.headerText}>
-            <Text variant="labelLarge" style={styles.eyebrow}>STEP 1 OF 2</Text>
+            <Text variant="labelLarge" style={styles.eyebrow}>
+              {readOnly ? 'MANAGEMENT VIEW' : 'STEP 1 OF 2'}
+            </Text>
             <Text variant="headlineSmall" style={styles.title}>
-              {activeView === 'seats' ? 'Choose your seats' : 'Bus & trip details'}
+              {readOnly
+                ? (activeView === 'seats' ? 'Seat occupancy' : 'Bus & trip details')
+                : (activeView === 'seats' ? 'Choose your seats' : 'Bus & trip details')}
             </Text>
           </View>
         </View>
@@ -265,7 +270,7 @@ export default function SeatSelectionScreen({ navigation, route }) {
           />
         ) : (
           <>
-        <Card style={styles.selectionCard}>
+        {!readOnly ? <Card style={styles.selectionCard}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>Passenger eligibility</Text>
             <Text variant="bodySmall" style={styles.muted}>
@@ -278,7 +283,11 @@ export default function SeatSelectionScreen({ navigation, route }) {
               style={styles.genderButtons}
             />
           </Card.Content>
-        </Card>
+        </Card> : (
+          <Text variant="bodySmall" style={styles.muted}>
+            Read-only occupancy · Live availability refreshes every 5 seconds.
+          </Text>
+        )}
 
         {loading ? (
           <View style={styles.status}>
@@ -292,7 +301,10 @@ export default function SeatSelectionScreen({ navigation, route }) {
               <Text variant="bodyMedium" style={styles.errorText}>{error}</Text>
             </Card.Content>
             <Card.Actions>
-              <Button mode="contained" onPress={() => navigation.replace('SeatSelection', { selectedBus, travelDate })}>
+              <Button
+                mode="contained"
+                onPress={() => navigation.replace('SeatSelection', { selectedBus, travelDate, readOnly })}
+              >
                 Try again
               </Button>
             </Card.Actions>
@@ -329,7 +341,7 @@ export default function SeatSelectionScreen({ navigation, route }) {
             </Card>
 
             <View style={styles.legend}>
-              {['AVAIL', 'BOOKED', 'F_AVAIL', 'F_BOOKED', 'M_AVAIL', 'M_BOOKED', 'SELECTED'].map((status) => {
+              {['AVAIL', 'BOOKED', 'F_AVAIL', 'F_BOOKED', 'M_AVAIL', 'M_BOOKED', ...(readOnly ? [] : ['SELECTED'])].map((status) => {
                 const style = status === 'SELECTED'
                   ? { backgroundColor: '#F59E0B', borderColor: '#D97706', color: '#FFFFFF' }
                   : STATUS_STYLES[status];
@@ -343,7 +355,7 @@ export default function SeatSelectionScreen({ navigation, route }) {
               })}
             </View>
 
-            <Card style={styles.fareCard}>
+            {!readOnly ? <Card style={styles.fareCard}>
               <Card.Content>
                 <View style={styles.fareLine}>
                   <Text style={styles.fareLabel}>Seats · {selectedSeats.map((seat) => seat.seatNumber).join(', ') || 'None selected'}</Text>
@@ -358,7 +370,7 @@ export default function SeatSelectionScreen({ navigation, route }) {
                   <Text style={styles.totalValue}>₹{total.toFixed(2)}</Text>
                 </View>
               </Card.Content>
-            </Card>
+            </Card> : null}
           </>
         )}
 
@@ -379,7 +391,9 @@ export default function SeatSelectionScreen({ navigation, route }) {
               color={activeView === 'seats' ? '#6750A4' : '#79747E'}
             />
             <Text style={[styles.tabLabel, activeView === 'seats' && styles.activeTabLabel]}>
-              Seat selection{selectedSeats.length ? ` · ${selectedSeats.length}` : ''}
+              {readOnly
+                ? 'Seat occupancy'
+                : `Seat selection${selectedSeats.length ? ` · ${selectedSeats.length}` : ''}`}
             </Text>
           </Pressable>
           <Pressable
@@ -398,16 +412,28 @@ export default function SeatSelectionScreen({ navigation, route }) {
             </Text>
           </Pressable>
         </View>
-        <Button
-          mode="contained"
-          icon={selectedSeats.length ? 'arrow-right' : 'seat'}
-          contentStyle={styles.continueContent}
-          onPress={handleContinue}
-          disabled={activeView === 'seats' && (loading || Boolean(error))}
-          style={styles.continueButton}
-        >
-          {selectedSeats.length ? 'Proceed to booking summary' : 'Choose seats to continue'}
-        </Button>
+        {readOnly ? (
+          <Button
+            mode="outlined"
+            icon="arrow-left"
+            contentStyle={styles.continueContent}
+            onPress={() => navigation.goBack()}
+            style={styles.continueButton}
+          >
+            Back to reservations
+          </Button>
+        ) : (
+          <Button
+            mode="contained"
+            icon={selectedSeats.length ? 'arrow-right' : 'seat'}
+            contentStyle={styles.continueContent}
+            onPress={handleContinue}
+            disabled={activeView === 'seats' && (loading || Boolean(error))}
+            style={styles.continueButton}
+          >
+            {selectedSeats.length ? 'Proceed to booking summary' : 'Choose seats to continue'}
+          </Button>
+        )}
       </View>
     </SafeAreaView>
   );

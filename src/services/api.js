@@ -378,11 +378,14 @@ export async function fetchManagedReservations() {
   return response.data;
 }
 
-export async function cancelManagedReservation(bookingId) {
+export async function cancelManagedReservation(bookingId, reason = '') {
   if (!Number.isSafeInteger(Number(bookingId)) || Number(bookingId) <= 0) {
     throw new Error('A valid reservation is required.');
   }
-  return api.post(`/admin/reservations/${bookingId}/cancel`);
+  if (typeof reason !== 'string' || reason.trim().length > 250) {
+    throw new Error('The cancellation reason must be 250 characters or fewer.');
+  }
+  return api.post(`/admin/reservations/${bookingId}/cancel`, { reason: reason.trim() });
 }
 
 export async function fetchManagedUsers() {
